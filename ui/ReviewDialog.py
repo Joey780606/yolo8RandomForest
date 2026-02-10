@@ -67,7 +67,8 @@ class ReviewDialog(ctk.CTkToplevel):
         )
         systemCaptureBtn.pack(fill="x", pady=3)
 
-        # Make modal
+        # Make modal (wait for window to be visible before grabbing)
+        self.wait_visibility()
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", lambda: self._setResult("discard"))
 
