@@ -145,6 +145,19 @@ class DynamicRecognitionPage(ctk.CTkFrame):
 
     def _recognitionLoop(self):
         """Main recognition loop running in background thread."""
+        # Pre-load YOLO model before starting timer so first detection isn't delayed
+        self.after(0, lambda: self.statusLabel.configure(
+            text="Loading YOLO model...",
+        ))
+        try:
+            self.yoloDetector.ensureModelLoaded()
+        except Exception as e:
+            self.after(0, lambda err=str(e): messagebox.showerror(
+                "Model Error", f"Could not load YOLO model: {err}",
+            ))
+            self.after(0, self._resetUi)
+            return
+
         # Start camera
         if not self.cameraCapture.start():
             self.after(0, lambda: messagebox.showerror(
@@ -158,6 +171,7 @@ class DynamicRecognitionPage(ctk.CTkFrame):
         faceDetectedAtLeastOnce = False
         self.capturedFrames = []
 
+        # Timer starts AFTER model is loaded
         startTime = time.time()
         lastDetectionTime = 0
         detectionIntervalSec = config.RecognitionDetectionIntervalMs / 1000.0
