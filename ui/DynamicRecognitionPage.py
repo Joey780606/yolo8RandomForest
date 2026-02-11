@@ -145,10 +145,9 @@ class DynamicRecognitionPage(ctk.CTkFrame):
 
     def _recognitionLoop(self):
         """Main recognition loop running in background thread."""
-        # Pre-load YOLO model before starting timer so first detection isn't delayed
-        self.after(0, lambda: self.statusLabel.configure(
-            text="Loading YOLO model...",
-        ))
+        # Preload YOLO model before starting camera/timer to avoid
+        # blocking the loop on first use
+        self.after(0, lambda: self.statusLabel.configure(text="Loading YOLO model..."))
         try:
             self.yoloDetector.ensureModelLoaded()
         except Exception as e:
@@ -171,7 +170,6 @@ class DynamicRecognitionPage(ctk.CTkFrame):
         faceDetectedAtLeastOnce = False
         self.capturedFrames = []
 
-        # Timer starts AFTER model is loaded
         startTime = time.time()
         lastDetectionTime = 0
         detectionIntervalSec = config.RecognitionDetectionIntervalMs / 1000.0
@@ -223,6 +221,7 @@ class DynamicRecognitionPage(ctk.CTkFrame):
                 if detectionResults:
                     counter = Counter(detectionResults)
                     mostCommon, count = counter.most_common(1)[0]
+                    print(f"[Random Forest1] 1st: {list(detectionResults)}")
                     if count >= config.RecognitionMatchThreshold:
                         self.after(0, lambda name=mostCommon:
                             self._onMatchFound(name))
@@ -274,7 +273,14 @@ class DynamicRecognitionPage(ctk.CTkFrame):
         self.isRecognizing = False
         self.startBtn.configure(state="normal")
         self.statusLabel.configure(text=f"Match found: {name}")
-        messagebox.showinfo("Match Found", f"Match Found: {name}")
+        messagebox.showinfo(
+            "Match Found",
+            f"Match Found: {name}\n\n"
+            "If incorrect, please enter your name, face the camera, "
+            "and press 'Confirm.' I will record and train to remember you.",
+        )
+        self.learnBtn.configure(state="normal")
+        self.awaitingNameInput = True
 
     def _onNoFaceDetected(self):
         """Handle no face detected within timeout."""
@@ -324,13 +330,17 @@ class DynamicRecognitionPage(ctk.CTkFrame):
         """Run the learning process: capture frames, extract features, retrain."""
         try:
             # Use captured frames from recognition attempt + capture more
-            framesToProcess = self.capturedFrames[-10:]  # Use up to 10 frames
+            framesToProcess = self.capturedFrames[-5:]  # Use up to 10 frames
 
-            # Also try to capture a few more frames from camera
+            # Capture frames from camera while showing live feed
             if self.cameraCapture.start():
+                self.after(0, lambda: self.statusLabel.configure(
+                    text=f"Recording frames for '{name}'... Please face the camera.",
+                ))
                 for _ in range(5):
                     frame = self.cameraCapture.readFrame()
                     if frame is not None:
+                        self.after(0, lambda f=frame.copy(): self._displayFrame(f))
                         framesToProcess.append(frame)
                     time.sleep(0.3)
                 self.cameraCapture.stop()
